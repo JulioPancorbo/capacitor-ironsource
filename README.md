@@ -1,3 +1,4 @@
+
 # capacitor-ironsource
 
 Capacitor plugin for native ironSource ad monetization.
@@ -8,7 +9,7 @@ To use npm
 
 ```bash
 npm install capacitor-ironsource
-````
+```
 
 To use yarn
 
@@ -24,7 +25,7 @@ npx cap sync
 
 ## API
 
-<docgen-index></docgen-index>
+`<docgen-index></docgen-index>`
 
 <docgen-api>
 <!-- run docgen to generate docs from the source -->
