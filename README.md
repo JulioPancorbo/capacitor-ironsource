@@ -33,6 +33,10 @@ npx cap sync
 * [`loadRewardedVideo(...)`](#loadrewardedvideo)
 * [`isRewardedVideoAvailable()`](#isrewardedvideoavailable)
 * [`showRewardedVideo()`](#showrewardedvideo)
+* [`loadInterstitial(...)`](#loadinterstitial)
+* [`isInterstitialAvailable()`](#isinterstitialavailable)
+* [`showInterstitial()`](#showinterstitial)
+* [`destroyInterstitial()`](#destroyinterstitial)
 * [`loadBanner(...)`](#loadbanner)
 * [`updateBannerLayout(...)`](#updatebannerlayout)
 * [`showBanner()`](#showbanner)
@@ -40,6 +44,7 @@ npx cap sync
 * [`destroyBanner()`](#destroybanner)
 * [`addListener('rewardEarned', ...)`](#addlistenerrewardearned-)
 * [`addListener('rewardedLoaded' | 'rewardedLoadFailed', ...)`](#addlistenerrewardedloaded--rewardedloadfailed-)
+* [`addListener('interstitialLoaded' | 'interstitialLoadFailed' | 'interstitialDisplayed' | 'interstitialDisplayFailed' | 'interstitialClicked' | 'interstitialClosed', ...)`](#addlistenerinterstitialloaded--interstitialloadfailed--interstitialdisplayed--interstitialdisplayfailed--interstitialclicked--interstitialclosed-)
 * [`addListener('bannerLoaded' | 'bannerDisplayed' | 'bannerClicked' | 'bannerLoadFailed', ...)`](#addlistenerbannerloaded--bannerdisplayed--bannerclicked--bannerloadfailed-)
 * [`removeAllListeners()`](#removealllisteners)
 * [Interfaces](#interfaces)
@@ -120,6 +125,54 @@ isRewardedVideoAvailable() => any
 
 ```typescript
 showRewardedVideo() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### loadInterstitial(...)
+
+```typescript
+loadInterstitial(options: InterstitialOptions) => any
+```
+
+| Param         | Type                                                                |
+| ------------- | ------------------------------------------------------------------- |
+| **`options`** | <code><a href="#interstitialoptions">InterstitialOptions</a></code> |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### isInterstitialAvailable()
+
+```typescript
+isInterstitialAvailable() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### showInterstitial()
+
+```typescript
+showInterstitial() => any
+```
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
+### destroyInterstitial()
+
+```typescript
+destroyInterstitial() => any
 ```
 
 **Returns:** <code>any</code>
@@ -222,6 +275,22 @@ addListener(eventName: 'rewardedLoaded' | 'rewardedLoadFailed', listenerFunc: (e
 --------------------
 
 
+### addListener('interstitialLoaded' | 'interstitialLoadFailed' | 'interstitialDisplayed' | 'interstitialDisplayFailed' | 'interstitialClicked' | 'interstitialClosed', ...)
+
+```typescript
+addListener(eventName: 'interstitialLoaded' | 'interstitialLoadFailed' | 'interstitialDisplayed' | 'interstitialDisplayFailed' | 'interstitialClicked' | 'interstitialClosed', listenerFunc: (event: InterstitialEvent) => void) => any
+```
+
+| Param              | Type                                                                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **`eventName`**    | <code>'interstitialLoaded' \| 'interstitialLoadFailed' \| 'interstitialDisplayed' \| 'interstitialDisplayFailed' \| 'interstitialClicked' \| 'interstitialClosed'</code> |
+| **`listenerFunc`** | <code>(event: <a href="#interstitialevent">InterstitialEvent</a>) =&gt; void</code>                                                                                      |
+
+**Returns:** <code>any</code>
+
+--------------------
+
+
 ### addListener('bannerLoaded' | 'bannerDisplayed' | 'bannerClicked' | 'bannerLoadFailed', ...)
 
 ```typescript
@@ -283,6 +352,21 @@ removeAllListeners() => any
 | **`available`** | <code>boolean</code> |
 
 
+#### InterstitialOptions
+
+| Prop                | Type                |
+| ------------------- | ------------------- |
+| **`adUnitId`**      | <code>string</code> |
+| **`placementName`** | <code>string</code> |
+
+
+#### InterstitialAvailabilityResult
+
+| Prop            | Type                 |
+| --------------- | -------------------- |
+| **`available`** | <code>boolean</code> |
+
+
 #### BannerOptions
 
 | Prop                | Type                |
@@ -328,6 +412,20 @@ removeAllListeners() => any
 
 
 #### RewardedStatusEvent
+
+| Prop               | Type                |
+| ------------------ | ------------------- |
+| **`placement`**    | <code>string</code> |
+| **`adUnit`**       | <code>string</code> |
+| **`adUnitId`**     | <code>string</code> |
+| **`adNetwork`**    | <code>string</code> |
+| **`instanceId`**   | <code>string</code> |
+| **`instanceName`** | <code>string</code> |
+| **`errorCode`**    | <code>number</code> |
+| **`errorMessage`** | <code>string</code> |
+
+
+#### InterstitialEvent
 
 | Prop               | Type                |
 | ------------------ | ------------------- |

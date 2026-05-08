@@ -7,26 +7,25 @@ import android.view.ViewParent;
 import android.widget.FrameLayout;
 
 import com.getcapacitor.JSObject;
-import com.ironsource.mediationsdk.ISBannerSize;
-import com.ironsource.mediationsdk.IronSourceBannerLayout;
-import com.ironsource.mediationsdk.adunit.adapter.utility.AdInfo;
-import com.ironsource.mediationsdk.logger.IronSourceError;
-import com.ironsource.mediationsdk.sdk.LevelPlayBannerListener;
 import com.unity3d.mediation.LevelPlay;
 import com.unity3d.mediation.LevelPlayAdInfo;
 import com.unity3d.mediation.LevelPlayAdError;
+import com.unity3d.mediation.LevelPlayAdSize;
 import com.unity3d.mediation.LevelPlayConfiguration;
 import com.unity3d.mediation.LevelPlayInitError;
 import com.unity3d.mediation.LevelPlayInitListener;
 import com.unity3d.mediation.LevelPlayInitRequest;
+import com.unity3d.mediation.banner.LevelPlayBannerAdView;
+import com.unity3d.mediation.banner.LevelPlayBannerAdViewListener;
+import com.unity3d.mediation.interstitial.LevelPlayInterstitialAd;
+import com.unity3d.mediation.interstitial.LevelPlayInterstitialAdListener;
 import com.unity3d.mediation.rewarded.LevelPlayReward;
 import com.unity3d.mediation.rewarded.LevelPlayRewardedAd;
 import com.unity3d.mediation.rewarded.LevelPlayRewardedAdListener;
 
-import java.util.Collections;
 import java.util.List;
 
-public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerListener {
+public class IronSource implements LevelPlayRewardedAdListener {
 
     public interface InitializationErrorListener {
         void onInitializationFailed(String errorMessage);
@@ -44,25 +43,103 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
         void onBannerEvent(String eventName, JSObject payload);
     }
 
+    public interface InterstitialEventListener {
+        void onInterstitialEvent(String eventName, JSObject payload);
+    }
+
     private final RewardEventListener rewardEventListener;
     private final RewardedStatusListener rewardedStatusListener;
     private final BannerEventListener bannerEventListener;
+    private final InterstitialEventListener interstitialEventListener;
     private volatile boolean initialized;
     private volatile boolean rewardedVideoAvailable;
+    private volatile boolean interstitialAvailable;
     private LevelPlayRewardedAd rewardedAd;
     private String rewardedAdUnitId;
-    private IronSourceBannerLayout bannerAdView;
+    private LevelPlayInterstitialAd interstitialAd;
+    private String interstitialAdUnitId;
+    private String interstitialPlacementName;
+    private LevelPlayBannerAdView bannerAdView;
     private ViewGroup bannerContainer;
     private String bannerAdUnitId;
+    private String bannerPlacementName;
+    private final LevelPlayBannerAdViewListener bannerAdListener = new LevelPlayBannerAdViewListener() {
+        @Override
+        public void onAdLoaded(LevelPlayAdInfo adInfo) {
+            bannerEventListener.onBannerEvent("bannerLoaded", buildBannerPayload(adInfo));
+        }
+
+        @Override
+        public void onAdLoadFailed(LevelPlayAdError error) {
+            bannerEventListener.onBannerEvent("bannerLoadFailed", buildBannerErrorPayload(null, error));
+        }
+
+        @Override
+        public void onAdDisplayed(LevelPlayAdInfo adInfo) {
+            bannerEventListener.onBannerEvent("bannerDisplayed", buildBannerPayload(adInfo));
+        }
+
+        @Override
+        public void onAdDisplayFailed(LevelPlayAdInfo adInfo, LevelPlayAdError error) {
+            bannerEventListener.onBannerEvent("bannerLoadFailed", buildBannerErrorPayload(adInfo, error));
+        }
+
+        @Override
+        public void onAdClicked(LevelPlayAdInfo adInfo) {
+            bannerEventListener.onBannerEvent("bannerClicked", buildBannerPayload(adInfo));
+        }
+    };
+    private final LevelPlayInterstitialAdListener interstitialAdListener = new LevelPlayInterstitialAdListener() {
+        @Override
+        public void onAdLoaded(LevelPlayAdInfo adInfo) {
+            interstitialAvailable = true;
+            interstitialEventListener.onInterstitialEvent("interstitialLoaded", buildInterstitialPayload(adInfo));
+        }
+
+        @Override
+        public void onAdLoadFailed(LevelPlayAdError error) {
+            interstitialAvailable = false;
+            interstitialEventListener.onInterstitialEvent("interstitialLoadFailed", buildInterstitialErrorPayload(error, null));
+        }
+
+        @Override
+        public void onAdDisplayed(LevelPlayAdInfo adInfo) {
+            interstitialAvailable = false;
+            interstitialEventListener.onInterstitialEvent("interstitialDisplayed", buildInterstitialPayload(adInfo));
+        }
+
+        @Override
+        public void onAdDisplayFailed(LevelPlayAdError error, LevelPlayAdInfo adInfo) {
+            interstitialAvailable = interstitialAd != null && interstitialAd.isAdReady();
+            interstitialEventListener.onInterstitialEvent("interstitialDisplayFailed", buildInterstitialErrorPayload(error, adInfo));
+        }
+
+        @Override
+        public void onAdClicked(LevelPlayAdInfo adInfo) {
+            interstitialEventListener.onInterstitialEvent("interstitialClicked", buildInterstitialPayload(adInfo));
+        }
+
+        @Override
+        public void onAdClosed(LevelPlayAdInfo adInfo) {
+            interstitialAvailable = interstitialAd != null && interstitialAd.isAdReady();
+            interstitialEventListener.onInterstitialEvent("interstitialClosed", buildInterstitialPayload(adInfo));
+        }
+
+        @Override
+        public void onAdInfoChanged(LevelPlayAdInfo adInfo) {
+        }
+    };
 
     public IronSource(
         RewardEventListener rewardEventListener,
         RewardedStatusListener rewardedStatusListener,
-        BannerEventListener bannerEventListener
+        BannerEventListener bannerEventListener,
+        InterstitialEventListener interstitialEventListener
     ) {
         this.rewardEventListener = rewardEventListener;
         this.rewardedStatusListener = rewardedStatusListener;
         this.bannerEventListener = bannerEventListener;
+        this.interstitialEventListener = interstitialEventListener;
     }
 
     public void initialize(
@@ -76,9 +153,12 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
         rewardedVideoAvailable = false;
         rewardedAd = null;
         rewardedAdUnitId = null;
+        interstitialAvailable = false;
+        interstitialAd = null;
+        interstitialAdUnitId = null;
+        interstitialPlacementName = null;
 
-        LevelPlayInitRequest.Builder requestBuilder = new LevelPlayInitRequest.Builder(appKey)
-            .withLegacyAdFormats(Collections.singletonList(LevelPlay.AdFormat.BANNER));
+        LevelPlayInitRequest.Builder requestBuilder = new LevelPlayInitRequest.Builder(appKey);
 
         if (userId != null && !userId.isEmpty()) {
             requestBuilder.withUserId(userId);
@@ -143,28 +223,63 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
         rewardedAd.showAd(activity);
     }
 
+    public void loadInterstitial(String adUnitId, String placementName) {
+        if (interstitialAd == null || !adUnitId.equals(interstitialAdUnitId)) {
+            interstitialAd = new LevelPlayInterstitialAd(adUnitId);
+            interstitialAd.setListener(interstitialAdListener);
+            interstitialAdUnitId = adUnitId;
+        }
+
+        interstitialPlacementName = placementName;
+        interstitialAvailable = interstitialAd.isAdReady();
+        interstitialAd.loadAd();
+    }
+
+    public boolean isInterstitialReady() {
+        return interstitialAd != null && interstitialAd.isAdReady();
+    }
+
+    public void showInterstitial(Activity activity) {
+        if (interstitialAd == null) {
+            return;
+        }
+
+        interstitialAd.showAd(activity);
+    }
+
+    public void destroyInterstitial() {
+        if (interstitialAd == null) {
+            return;
+        }
+
+        interstitialAd.setListener(null);
+        interstitialAd = null;
+        interstitialAvailable = false;
+        interstitialAdUnitId = null;
+        interstitialPlacementName = null;
+    }
+
     public void loadBanner(Activity activity, View webView, String adUnitId, String placementName, double x, double y, double width, double height, double scale) {
         destroyBanner();
 
         bannerAdUnitId = adUnitId;
-        bannerAdView = com.ironsource.mediationsdk.IronSource.createBanner(activity, ISBannerSize.BANNER);
-        bannerAdView.setLevelPlayBannerListener(this);
-        bannerAdView.setVisibility(View.GONE);
+        bannerPlacementName = placementName;
 
+        LevelPlayBannerAdView.Config.Builder configBuilder = new LevelPlayBannerAdView.Config.Builder()
+            .setAdSize(LevelPlayAdSize.createAdaptiveAdSize(activity));
         if (!placementName.isEmpty()) {
-            bannerAdView.setPlacementName(placementName);
+            configBuilder.setPlacementName(placementName);
         }
+
+        bannerAdView = new LevelPlayBannerAdView(activity, adUnitId, configBuilder.build());
+        bannerAdView.setBannerListener(bannerAdListener);
+        bannerAdView.setVisibility(View.GONE);
 
         bannerContainer = activity.findViewById(android.R.id.content);
         attachBannerView();
 
         updateBannerLayout(webView, x, y, width, height, scale);
-        if (!placementName.isEmpty()) {
-            com.ironsource.mediationsdk.IronSource.loadBanner(bannerAdView, placementName);
-            return;
-        }
-
-        com.ironsource.mediationsdk.IronSource.loadBanner(bannerAdView);
+        bannerAdView.loadAd();
     }
 
     public void updateBannerLayout(View webView, double x, double y, double width, double height, double scale) {
@@ -217,10 +332,12 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
 
         detachBannerView();
 
-        com.ironsource.mediationsdk.IronSource.destroyBanner(bannerAdView);
+        bannerAdView.setBannerListener(null);
+        bannerAdView.destroy();
         bannerAdView = null;
         bannerContainer = null;
         bannerAdUnitId = null;
+        bannerPlacementName = null;
     }
 
     private void attachBannerView() {
@@ -251,7 +368,7 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
         }
     }
 
-    private JSObject buildBannerPayload(AdInfo adInfo) {
+    private JSObject buildBannerPayload(LevelPlayAdInfo adInfo) {
         JSObject payload = new JSObject();
 
         if (bannerAdView != null) {
@@ -263,20 +380,30 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
             if (bannerAdUnitId != null) {
                 payload.put("adUnitId", bannerAdUnitId);
             }
+            if (bannerPlacementName != null && !bannerPlacementName.isEmpty()) {
+                payload.put("placement", bannerPlacementName);
+            }
             return payload;
         }
 
         if (bannerAdUnitId != null) {
             payload.put("adUnitId", bannerAdUnitId);
         }
-        payload.put("adFormat", adInfo.getAdUnit());
+        if (bannerPlacementName != null && !bannerPlacementName.isEmpty()) {
+            payload.put("placement", bannerPlacementName);
+        }
+        if (adInfo.getPlacementName() != null && !adInfo.getPlacementName().isEmpty()) {
+            payload.put("placement", adInfo.getPlacementName());
+        }
+        payload.put("adUnit", adInfo.getAdUnitId());
+        payload.put("adFormat", "BANNER");
         payload.put("adNetwork", adInfo.getAdNetwork());
         payload.put("instanceId", adInfo.getInstanceId());
         payload.put("instanceName", adInfo.getInstanceName());
         return payload;
     }
 
-    private JSObject buildBannerErrorPayload(AdInfo adInfo, IronSourceError error) {
+    private JSObject buildBannerErrorPayload(LevelPlayAdInfo adInfo, LevelPlayAdError error) {
         JSObject payload = buildBannerPayload(adInfo);
         if (error != null) {
             payload.put("errorCode", error.getErrorCode());
@@ -329,6 +456,38 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
         return payload;
     }
 
+    private JSObject buildInterstitialPayload(LevelPlayAdInfo adInfo) {
+        JSObject payload = new JSObject();
+
+        if (interstitialAdUnitId != null) {
+            payload.put("adUnitId", interstitialAdUnitId);
+        }
+
+        if (interstitialPlacementName != null && !interstitialPlacementName.isEmpty()) {
+            payload.put("placement", interstitialPlacementName);
+        }
+
+        if (adInfo == null) {
+            return payload;
+        }
+
+        payload.put("placement", adInfo.getPlacementName());
+        payload.put("adUnit", adInfo.getAdUnitId());
+        payload.put("adNetwork", adInfo.getAdNetwork());
+        payload.put("instanceId", adInfo.getInstanceId());
+        payload.put("instanceName", adInfo.getInstanceName());
+        return payload;
+    }
+
+    private JSObject buildInterstitialErrorPayload(LevelPlayAdError error, LevelPlayAdInfo adInfo) {
+        JSObject payload = buildInterstitialPayload(adInfo);
+        if (error != null) {
+            payload.put("errorCode", error.getErrorCode());
+            payload.put("errorMessage", error.getErrorMessage());
+        }
+        return payload;
+    }
+
     @Override
     public void onAdLoaded(LevelPlayAdInfo adInfo) {
         rewardedVideoAvailable = true;
@@ -369,30 +528,4 @@ public class IronSource implements LevelPlayRewardedAdListener, LevelPlayBannerL
     public void onAdInfoChanged(LevelPlayAdInfo adInfo) {
     }
 
-    @Override
-    public void onAdLoaded(AdInfo adInfo) {
-        bannerEventListener.onBannerEvent("bannerLoaded", buildBannerPayload(adInfo));
-    }
-
-    @Override
-    public void onAdLoadFailed(IronSourceError error) {
-        bannerEventListener.onBannerEvent("bannerLoadFailed", buildBannerErrorPayload(null, error));
-    }
-
-    @Override
-    public void onAdClicked(AdInfo adInfo) {
-        bannerEventListener.onBannerEvent("bannerClicked", buildBannerPayload(adInfo));
-    }
-
-    @Override
-    public void onAdLeftApplication(AdInfo adInfo) {
-    }
-
-    @Override
-    public void onAdScreenPresented(AdInfo adInfo) {
-    }
-
-    @Override
-    public void onAdScreenDismissed(AdInfo adInfo) {
-    }
 }

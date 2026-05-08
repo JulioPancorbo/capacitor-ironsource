@@ -6,7 +6,7 @@ import Capacitor
  * here: https://capacitorjs.com/docs/plugins/ios
  */
 @objc(IronSourcePlugin)
-public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardListener, IronSourceBannerListener {
+public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardListener, IronSourceBannerListener, IronSourceInterstitialListener {
     public let identifier = "IronSourcePlugin"
     public let jsName = "IronSource"
     public let pluginMethods: [CAPPluginMethod] = [
@@ -16,6 +16,10 @@ public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardList
         CAPPluginMethod(name: "loadRewardedVideo", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isRewardedVideoAvailable", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "showRewardedVideo", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "loadInterstitial", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isInterstitialAvailable", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "showInterstitial", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "destroyInterstitial", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "loadBanner", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateBannerLayout", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "showBanner", returnType: CAPPluginReturnPromise),
@@ -25,7 +29,9 @@ public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardList
     private static let errorMissingAppKey = "IronSource initialization failed: appKey is required."
     private static let errorNotInitialized = "IronSource SDK is not initialized. Call initialize({ appKey }) first."
     private static let errorRewardedNotReady = "Rewarded video is not ready. Call loadRewardedVideo() and wait until an ad is available."
+    private static let errorInterstitialNotReady = "Interstitial is not ready. Call loadInterstitial({ adUnitId }) and wait until an ad is available."
     private static let errorViewControllerUnavailable = "IronSource operation failed: view controller is unavailable."
+    private static let errorInterstitialAdUnitRequired = "Interstitial load failed: adUnitId is required."
     private static let errorBannerAdUnitRequired = "Banner load failed: adUnitId is required."
     private static let errorMetadataKeyRequired = "IronSource setMetaData failed: key is required."
     private static let errorMetadataValueRequired = "IronSource setMetaData failed: provide value or values."
@@ -33,7 +39,7 @@ public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardList
     private var implementation: IronSource?
 
     public override func load() {
-        implementation = IronSource(rewardListener: self, bannerListener: self)
+        implementation = IronSource(rewardListener: self, bannerListener: self, interstitialListener: self)
     }
 
     @objc func initialize(_ call: CAPPluginCall) {
@@ -147,6 +153,71 @@ public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardList
         }
     }
 
+    @objc func loadInterstitial(_ call: CAPPluginCall) {
+        guard let implementation, implementation.initialized else {
+            call.reject(Self.errorNotInitialized)
+            return
+        }
+
+        let adUnitId = call.getString("adUnitId")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !adUnitId.isEmpty else {
+            call.reject(Self.errorInterstitialAdUnitRequired)
+            return
+        }
+
+        let placementName = call.getString("placementName")?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        DispatchQueue.main.async {
+            implementation.loadInterstitial(adUnitId: adUnitId, placementName: placementName)
+            call.resolve()
+        }
+    }
+
+    @objc func isInterstitialAvailable(_ call: CAPPluginCall) {
+        guard let implementation, implementation.initialized else {
+            call.reject(Self.errorNotInitialized)
+            return
+        }
+
+        call.resolve([
+            "available": implementation.isInterstitialReady()
+        ])
+    }
+
+    @objc func showInterstitial(_ call: CAPPluginCall) {
+        guard let implementation, implementation.initialized else {
+            call.reject(Self.errorNotInitialized)
+            return
+        }
+
+        guard let viewController = bridge?.viewController else {
+            call.reject(Self.errorViewControllerUnavailable)
+            return
+        }
+
+        DispatchQueue.main.async {
+            guard implementation.isInterstitialReady() else {
+                call.reject(Self.errorInterstitialNotReady)
+                return
+            }
+
+            implementation.showInterstitial(from: viewController)
+            call.resolve()
+        }
+    }
+
+    @objc func destroyInterstitial(_ call: CAPPluginCall) {
+        guard let implementation, implementation.initialized else {
+            call.reject(Self.errorNotInitialized)
+            return
+        }
+
+        DispatchQueue.main.async {
+            implementation.destroyInterstitial()
+            call.resolve()
+        }
+    }
+
     @objc func loadBanner(_ call: CAPPluginCall) {
         guard let implementation, implementation.initialized else {
             call.reject(Self.errorNotInitialized)
@@ -255,6 +326,12 @@ public class IronSourcePlugin: CAPPlugin, CAPBridgedPlugin, IronSourceRewardList
     }
 
     func onBannerEvent(_ eventName: String, payload: [String: Any]) {
+        DispatchQueue.main.async {
+            self.notifyListeners(eventName, data: payload)
+        }
+    }
+
+    func onInterstitialEvent(_ eventName: String, payload: [String: Any]) {
         DispatchQueue.main.async {
             self.notifyListeners(eventName, data: payload)
         }

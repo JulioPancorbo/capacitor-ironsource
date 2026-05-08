@@ -27,7 +27,16 @@ export interface BannerLayoutOptions {
   scale?: number;
 }
 
+export interface InterstitialOptions {
+  adUnitId: string;
+  placementName?: string;
+}
+
 export interface RewardedAvailabilityResult {
+  available: boolean;
+}
+
+export interface InterstitialAvailabilityResult {
   available: boolean;
 }
 
@@ -72,6 +81,17 @@ export interface RewardedStatusEvent {
   errorMessage?: string;
 }
 
+export interface InterstitialEvent {
+  placement?: string;
+  adUnit?: string;
+  adUnitId?: string;
+  adNetwork?: string;
+  instanceId?: string;
+  instanceName?: string;
+  errorCode?: number;
+  errorMessage?: string;
+}
+
 export interface IronSourcePlugin {
   initialize(options: InitializeOptions): Promise<void>;
   setMetaData(options: SetMetaDataOptions): Promise<void>;
@@ -79,6 +99,10 @@ export interface IronSourcePlugin {
   loadRewardedVideo(options: RewardedVideoOptions): Promise<void>;
   isRewardedVideoAvailable(): Promise<RewardedAvailabilityResult>;
   showRewardedVideo(): Promise<void>;
+  loadInterstitial(options: InterstitialOptions): Promise<void>;
+  isInterstitialAvailable(): Promise<InterstitialAvailabilityResult>;
+  showInterstitial(): Promise<void>;
+  destroyInterstitial(): Promise<void>;
   loadBanner(options: BannerOptions): Promise<void>;
   updateBannerLayout(options: BannerLayoutOptions): Promise<void>;
   showBanner(): Promise<void>;
@@ -91,6 +115,16 @@ export interface IronSourcePlugin {
   addListener(
     eventName: 'rewardedLoaded' | 'rewardedLoadFailed',
     listenerFunc: (event: RewardedStatusEvent) => void,
+  ): Promise<PluginListenerHandle>;
+  addListener(
+    eventName:
+      | 'interstitialLoaded'
+      | 'interstitialLoadFailed'
+      | 'interstitialDisplayed'
+      | 'interstitialDisplayFailed'
+      | 'interstitialClicked'
+      | 'interstitialClosed',
+    listenerFunc: (event: InterstitialEvent) => void,
   ): Promise<PluginListenerHandle>;
   addListener(
     eventName: 'bannerLoaded' | 'bannerDisplayed' | 'bannerClicked' | 'bannerLoadFailed',

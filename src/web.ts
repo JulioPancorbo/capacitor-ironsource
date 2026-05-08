@@ -1,5 +1,13 @@
 import { WebPlugin } from '@capacitor/core';
-import type { BannerLayoutOptions, BannerOptions, IronSourcePlugin, RewardedVideoOptions, SetMetaDataOptions } from './definitions';
+import type {
+  BannerLayoutOptions,
+  BannerOptions,
+  InterstitialAvailabilityResult,
+  InterstitialOptions,
+  IronSourcePlugin,
+  RewardedVideoOptions,
+  SetMetaDataOptions,
+} from './definitions';
 
 export class IronSourceWeb extends WebPlugin implements IronSourcePlugin {
   async initialize(options: { appKey: string }): Promise<void> {
@@ -24,6 +32,22 @@ export class IronSourceWeb extends WebPlugin implements IronSourcePlugin {
 
   async showRewardedVideo(): Promise<void> {
     console.log('ironSource showRewardedVideo called');
+  }
+
+  async loadInterstitial(options: InterstitialOptions): Promise<void> {
+    console.log('ironSource loadInterstitial called with options:', options);
+  }
+
+  async isInterstitialAvailable(): Promise<InterstitialAvailabilityResult> {
+    return { available: false };
+  }
+
+  async showInterstitial(): Promise<void> {
+    console.log('ironSource showInterstitial called');
+  }
+
+  async destroyInterstitial(): Promise<void> {
+    console.log('ironSource destroyInterstitial called');
   }
 
   async loadBanner(options: BannerOptions): Promise<void> {

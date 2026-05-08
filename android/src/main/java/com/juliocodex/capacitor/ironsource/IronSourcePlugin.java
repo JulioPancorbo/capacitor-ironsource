@@ -19,6 +19,8 @@ public class IronSourcePlugin extends Plugin {
     private static final String ERROR_NOT_INITIALIZED = "IronSource SDK is not initialized. Call initialize({ appKey }) first.";
     private static final String ERROR_REWARDED_NOT_READY = "Rewarded video is not ready. Call loadRewardedVideo({ adUnitId }) and wait until an ad is available.";
     private static final String ERROR_REWARDED_AD_UNIT_REQUIRED = "Rewarded load failed: adUnitId is required.";
+    private static final String ERROR_INTERSTITIAL_NOT_READY = "Interstitial is not ready. Call loadInterstitial({ adUnitId }) and wait until an ad is available.";
+    private static final String ERROR_INTERSTITIAL_AD_UNIT_REQUIRED = "Interstitial load failed: adUnitId is required.";
     private static final String ERROR_ACTIVITY_UNAVAILABLE = "IronSource operation failed: activity is unavailable.";
     private static final String ERROR_BANNER_AD_UNIT_REQUIRED = "Banner load failed: adUnitId is required.";
     private static final String ERROR_METADATA_KEY_REQUIRED = "IronSource setMetaData failed: key is required.";
@@ -28,7 +30,7 @@ public class IronSourcePlugin extends Plugin {
 
     @Override
     public void load() {
-        implementation = new IronSource(this::notifyRewardEarned, this::notifyRewardedEvent, this::notifyBannerEvent);
+        implementation = new IronSource(this::notifyRewardEarned, this::notifyRewardedEvent, this::notifyBannerEvent, this::notifyInterstitialEvent);
     }
 
     @Override
@@ -185,6 +187,88 @@ public class IronSourcePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void loadInterstitial(PluginCall call) {
+        if (implementation == null || !implementation.isInitialized()) {
+            call.reject(ERROR_NOT_INITIALIZED);
+            return;
+        }
+
+        String adUnitId = call.getString("adUnitId", "").trim();
+        if (adUnitId.isEmpty()) {
+            call.reject(ERROR_INTERSTITIAL_AD_UNIT_REQUIRED);
+            return;
+        }
+
+        Activity activity = bridge.getActivity();
+        if (activity == null) {
+            call.reject(ERROR_ACTIVITY_UNAVAILABLE);
+            return;
+        }
+
+        String placementName = call.getString("placementName", "").trim();
+
+        activity.runOnUiThread(() -> {
+            implementation.loadInterstitial(adUnitId, placementName);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void isInterstitialAvailable(PluginCall call) {
+        if (implementation == null || !implementation.isInitialized()) {
+            call.reject(ERROR_NOT_INITIALIZED);
+            return;
+        }
+
+        JSObject result = new JSObject();
+        result.put("available", implementation.isInterstitialReady());
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void showInterstitial(PluginCall call) {
+        if (implementation == null || !implementation.isInitialized()) {
+            call.reject(ERROR_NOT_INITIALIZED);
+            return;
+        }
+
+        Activity activity = bridge.getActivity();
+        if (activity == null) {
+            call.reject(ERROR_ACTIVITY_UNAVAILABLE);
+            return;
+        }
+
+        activity.runOnUiThread(() -> {
+            if (!implementation.isInterstitialReady()) {
+                call.reject(ERROR_INTERSTITIAL_NOT_READY);
+                return;
+            }
+
+            implementation.showInterstitial(activity);
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
+    public void destroyInterstitial(PluginCall call) {
+        if (implementation == null || !implementation.isInitialized()) {
+            call.reject(ERROR_NOT_INITIALIZED);
+            return;
+        }
+
+        Activity activity = bridge.getActivity();
+        if (activity == null) {
+            call.reject(ERROR_ACTIVITY_UNAVAILABLE);
+            return;
+        }
+
+        activity.runOnUiThread(() -> {
+            implementation.destroyInterstitial();
+            call.resolve();
+        });
+    }
+
+    @PluginMethod
     public void loadBanner(PluginCall call) {
         if (implementation == null || !implementation.isInitialized()) {
             call.reject(ERROR_NOT_INITIALIZED);
@@ -319,6 +403,16 @@ public class IronSourcePlugin extends Plugin {
     }
 
     private void notifyBannerEvent(String eventName, JSObject payload) {
+        Activity activity = bridge.getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> notifyListeners(eventName, payload));
+            return;
+        }
+
+        notifyListeners(eventName, payload);
+    }
+
+    private void notifyInterstitialEvent(String eventName, JSObject payload) {
         Activity activity = bridge.getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> notifyListeners(eventName, payload));
